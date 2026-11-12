@@ -45,11 +45,38 @@ assets/rv_binddatas.xml
 `libumeng-spy.so`（友盟）、`com.applovin`、`com.mbridge`、`com.unity3d.ads`、
 `com.vungle` —— 典型的国内出海工具类应用广告栈。
 
-## 4. 2026-11-12 状态
+## 4. native 层的真实职责
+
+把 `libZFutureLib.so`（arm64，911KB）的字符串池拉出来，JNI 导出只有 6 个：
+
+```
+Java_com_art_fantasy_zfuture_ZFuture_decodeData
+Java_com_art_fantasy_zfuture_ZFuture_decodeToken1
+Java_com_art_fantasy_zfuture_ZFuture_generateBdStr
+Java_com_art_fantasy_zfuture_ZFuture_getcalsign
+Java_com_art_fantasy_zfuture_ZFuture_gqo
+Java_com_art_fantasy_zfuture_ZFuture_isJSValid
+```
+
+符号表里存在 `aes_set_key`。整个库里 **没有任何 host / URL / `/api` 字符串**——
+native 层只做 **AES 加解密 + token 生成 + 签名（getcalsign）+ JS 校验**，不发起网络请求。
+4 个 ABI 的 `libZFutureLib.so` 大小相近（911KB / 928KB / 998KB / 551KB），说明它就是同一份
+加密工具库。
+
+## 5. 原版 APK 的 dex 也查过
+
+`assets/SignatureKiller/origin.apk`（73.9MB，2023-11-03）是破解者塞进去的原版包，
+含 4 个 dex（10.5MB / 9.4MB / 9.0MB / 8.4MB）。从这 4 个 dex 里提取 `https://` 常量，
+业务域名同样为 0——只有 YouTube / Samsung / Amazon 三个商店链接。
+
+**结论**：`com.art.fantasy` 的网络层域名既不在 dex 也不在 native 明文里，
+只可能来自运行时解密的资源或远程配置。纯静态到此为止。
+
+## 6. 2026-11-12 状态
 
 静态阶段没有拿到任何业务域名，也没有跑起来验证。这一份**只有形态结论，没有协议结论**。
 
-## 5. 下一步
+## 7. 下一步
 
 1. 先解 `assets/SignatureKiller/origin.apk`，看原版 dex 是否有残留的业务字符串
    （MOD 版可能删了原版的部分资源）。
