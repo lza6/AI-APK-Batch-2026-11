@@ -187,3 +187,78 @@ consumeType, points, platFormId, prompt, content, enContent, ratio, width, heigh
 1. AI 生成端点：模拟器 + Frida 挂 `dart:io` 的 `HttpClient`，或实体设备抓包。
 2. analytics 网关已可用，可直接做号池/统计类集成。
 3. 拿到端点后复用 GPTalk 的信封解析，两个 App 的响应结构大概率一致。
+
+## 6. AI 生成侧：v4 协议与 RSA 信封（已打通加密）
+
+`AiWorkerPlugin` 不是发 HTTP 的，它走 `MethodChannel` 到原生 `AIServiceSdk`。
+原生初始化参数（`com/energysh/quickart/server/ai/AIServiceSdk.java`）：
+
+```java
+AIServiceLib.h(context,
+    "YZ080",                                  // appId
+    "https://aicup-v2.magicutapp.com/",       // AI base
+    "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC89/6HolP425cyY2E0A9l8P05WFLywJd1xm8V4bbysY++/UyRxndOhq6jbn9uo8uO5vHCnFE6xVyKSSjxD19491QryKTJT7K78qckPyprrPb6L9lwQFXUjw8OWqR65Elj3anx22PVm6wfEbVzfIj/tnGdYrtAzXJPaiY1izlzPhQIDAQAB",
+    "GOOGLEPLAY", "", true, listener);
+```
+
+### 6.1 v4 端点（实测）
+
+| 端点 | 方法 | 实测 |
+|---|---|---|
+| `/v4/getUuid` | POST JSON | **200** `{"success":true,"code":0,"data":"<uuid>"}` |
+| `/v4/upload` | POST multipart | 200，校验 `decrypt`/`sign`/`content` 三件套 |
+| `/v4/ocr` | POST | 存在（缺 uId 时 400） |
+| `/v4/downLoad/{key}` | POST | 200 `code:407 "The object has expired<key>"` |
+
+`GET` 访问 `v4/downLoad/*` / `v4/upload` 会返回 `code:500 "Request method 'GET' is not supported"`，
+说明路由真实存在，只是方法不对。
+
+### 6.2 参数信封（`com.energysh.aiservice.api.d`）
+
+```java
+// d.b(priority, aiFunAction, extraData)
+HashMap = {
+  "appTime":  <millis>,
+  "priority": "99" (VIP) / "50",
+  "uId":      <v4/getUuid 返回的 uuid>,
+  "pkgName":  "com.energysh.quickarte",
+  ...extraData   // platFormId / pointId / consumeType / requestType / imageFile ...
+}
+decrypt = Base64( RSA/ECB/PKCS1Padding( JSON ) )   // 117 字节分块
+sign    = g.a( deviceId + appId + appTime )
+```
+
+RSA 公钥在 `d.f7724b`（与 `AIServiceSdk` 里那把不同，是 API 专用公钥）。
+`h.a(byte[], PublicKey)` 就是 `Cipher.getInstance("RSA/ECB/PKCS1Padding")` 按 117 字节循环加密，
+`j2.d.a(byte[])` 是标准 Base64。
+
+**实测验证**：用这把公钥按上述规则加密 `{appTime, priority:"99", uId, pkgName, prompt, ...}`
+后 POST 到 `/v4/upload`，服务端错误从「请检查uId、pkgName、appId参数值是否有问题！」
+变成了 **「该功能未配置！」**——说明 `decrypt` 被成功解密，参数校验通过。
+
+### 6.3 AiFunAction：50+ 个 action 枚举
+
+`com/energysh/aiservice/api/AiFunAction.java` 里是完整的业务动作表，`functionTag()` 给出小写别名：
+
+```
+TEXT_TO_IMAGE       -> texttoimage
+TEXT_TO_VIDEO       -> texttovideo      (IMAGE_TO_VIDEO 共用)
+TEXT_TO_IMAGE2      -> refertoimage
+IMAGE_TO_IMAGE      -> imagetoimage
+AI_CHAT             -> aichat
+GPT_MINI / GPT_GEMINI / AI_CHAT_GPT4
+TEXT_TO_MUSIC / TEXT_TO_VOICE / AUDIO_DRIVEN
+FACE_SWAP / VIDEO_SWAP_FACE / IMAGE_SWAP_FACES
+JPCartoon / MagicCartoon / SkySegment / ChangeClothes / ChangeHairStyle ...
+```
+
+完整枚举 50+ 项，含 `CANCEL_TASK`。
+
+### 6.4 差在哪
+
+`v4/upload` 不带场景参数时统一回「该功能未配置」。这说明 **YZ080 这个 appId 在服务端的功能开关**
+没有被打开，或者场景还要走另一条 action 路径（`AiRepository.g(api, ...)` 的 `api` 是外部传入，
+不在 `ServiceApis` 里）。
+
+**结论**：加密层、端点、参数结构、action 表都已经拿全，剩下的是服务端开关或那个 `api` 路径的字符串。
+纯静态已经到顶；再往下要么动态抓一次真实请求，要么拿一个已开通功能的 appId。
