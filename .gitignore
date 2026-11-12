@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.apk
+*.zip
+decom/
+work/
+*.log
+.hs_err*
+replay_pid*
+*.png.bak
