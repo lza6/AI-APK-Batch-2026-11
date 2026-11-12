@@ -38,6 +38,15 @@ python AskMeAnything-NovaAI/server/stress_test.py
 python _tools/browser_verify.py
 ```
 
+## 对接 new-api
+
+完整指南见 [`docs/NEWAPI-INTEGRATION.md`](docs/NEWAPI-INTEGRATION.md)：渠道类型、Base URL 填法、
+模型映射、`usage` 补齐、Viddo v4 异步任务的适配层骨架，以及上线检查清单。
+
+一句话版本：new-api 加一个 **OpenAI 类型**渠道，Base URL 填 `http://127.0.0.1:18621`
+（不要带 `/v1`），模型填 `aichat-1..5`，密钥随便填。适配层的 `/v1/chat/completions`
+已经实现了流式和非流式。
+
 ## AIChat 的加密层
 
 AIChat 的响应是 `DES/CBC/PKCS5Padding` + Base64。key/iv 由 `Parser.doGetKey` /
