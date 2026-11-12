@@ -41,6 +41,34 @@ blutter <path>/lib/arm64-v8a/libapp.so <flutter_sdk_dir>
 
 结论与 GPTalk 相同：**服务在线，端点在运行时才可知**。
 
+### 3.1 从 `libapp.so` 补到的线索
+
+Dart 字符串池里还能挖到这些完整常量：
+
+```
+https://manage.magicutapp.com/appMagicCutApi/customizepage?pageType=Viddo_PrivacyPolicy
+https://manage.magicutapp.com/appMagicCutApi/customizepage?pageType=Viddo_TermsofServiceX
+https://analytics.enjoymobiserver.com/vsAnalytics/1.0.1/clientDevice/activeDeviceReport.html
+https://analytics.enjoymobiserver.com/vsAnalytics/1.0.1/clientDevice/registerNewDevice.html
+https://analytics.enjoymobiserver.com/vsAnalytics/1.0.1/clientEvent/eventDataReport.html
+/api/service_apis
+/api/service_configs
+```
+
+`manage.magicutapp.com` 是一套 JSP 运营后台（`/appMagicCutApi/customizepage` GET 返回 200、97KB
+HTML 内容页），`/api/service_apis` 与 `/api/service_configs` 是配置接口名。
+
+四个 host 上实测这两个接口：
+
+| host | `/api/service_configs` | `/api/service_apis` |
+|---|---|---|
+| `camera.magicutapp.com` | 400（Tomcat 8.5.11） | 400 |
+| `aicup-v2.magicutapp.com` | 统一信封 + 404 | 统一信封 + 404 |
+| `apis.videoshowapp.com` | 404 | 404 |
+| `manage.magicutapp.com` | 400 | 400 |
+
+说明这两个接口要么需要参数/签名，要么挂在别的服务上。**端点仍未闭合，需要动态抓包**。
+
 ## 4. 下一步
 
 1. `blutter` 反 `libapp.so`，在 `pp.txt` 里按 `magicutapp` / `videoshowapp` 检索 `Uri`。

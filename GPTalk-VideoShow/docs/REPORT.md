@@ -52,7 +52,22 @@ ENJOY_BASE_URL  = https://apis.videoshowapp.com/
 `/api/v1/ai/model`、`/api/v1/chat`、`/api/v1/ai/chat`（GET 与 POST 均是）。
 `camera.magicutapp.com` 根路径 302；`apis.videoshowapp.com` 是 Tomcat，根路径 404。
 
-## 5. 下一步
+## 5. 同族新增线索（来自 Viddo 的 `libapp.so`）
+
+同公司的 Viddo 把这家公司的服务版图暴露得更全：
+
+```
+https://manage.magicutapp.com/appMagicCutApi/customizepage   # JSP 运营后台，200
+/api/service_apis                                            # 配置接口名
+/api/service_configs                                         # 配置接口名
+https://analytics.enjoymobiserver.com/vsAnalytics/1.0.1/...   # 设备注册与事件上报
+```
+
+`manage.magicutapp.com` 实测在线（根路径 400/Tomcat，`/appMagicCutApi/customizepage` 200、97KB HTML）。
+`/api/service_apis` 与 `/api/service_configs` 在四个 host 上均 400/404，需要参数或签名，
+GPTalk 侧大概率也用同一套服务发现机制。
+
+## 6. 下一步
 
 要补齐端点只有一条路：在模拟器里跑起来，用 Frida 挂 `HttpURLConnection` / OkHttp 的
 `Request.Builder`，把真实 URL 打出来。`\0IAP` 包的解密函数在 `libconfig.so` 里，
